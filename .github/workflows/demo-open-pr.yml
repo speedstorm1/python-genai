@@ -1,0 +1,24 @@
+# Demo only (Duck Duck Demo, genai-release). Opens the release PR that
+# release-please opened upstream, googleapis/python-genai#3067, from the branch the
+# demo set up. As github-actions[bot], so the repo's owner can approve it.
+name: Demo - open the release PR
+on: workflow_dispatch
+permissions:
+  contents: read
+  pull-requests: write
+jobs:
+  open:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/demo
+      - name: Open the PR
+        run: |
+          f=.github/demo/release.json
+          jq -r .pr.body "$f" > body.md
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main \
+            --head "$(jq -r .pr.head_ref "$f")" --title "$(jq -r .pr.title "$f")" \
+            --body-file body.md --label "autorelease: pending"

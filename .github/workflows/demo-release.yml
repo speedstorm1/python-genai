@@ -1,0 +1,47 @@
+# Demo only (Duck Duck Demo, genai-release). What release-please does upstream
+# once its release PR merges: tag the merge and publish the GitHub release with
+# the release notes.
+# Then it starts the Docs run that publishes the release, as the release's own Docs run does upstream.
+name: Demo - release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+  actions: write
+jobs:
+  release:
+    if: github.repository == 'speedstorm1/python-genai'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      F: .github/demo/release.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/
+          sparse-checkout-cone-mode: false
+      - name: Is this the release PR's merge?
+        id: which
+        run: |
+          title=$(jq -r .pr.title "$F")
+          subject=$(git log -1 --format=%s)
+          case "$subject" in
+            "$title (#"*) echo "release=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Not the release PR's merge: $subject" ;;
+          esac
+      - name: Publish the GitHub release
+        if: steps.which.outputs.release == 'true'
+        run: |
+          jq -r .release.body "$F" > notes.md
+          gh release create "$(jq -r .release.tag "$F")" --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "$(jq -r .release.name "$F")" \
+            --notes-file notes.md
+      - name: Start the Docs run that publishes this release
+        if: steps.which.outputs.release == 'true'
+        run: |
+          gh workflow run docs.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f ref="$(jq -r .release.tag "$F")" -f deploy=true
